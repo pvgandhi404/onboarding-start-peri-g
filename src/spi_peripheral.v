@@ -1,17 +1,17 @@
 `default_nettype none
 
 module spi_peripheral(
-    input  wire       clk,      // clock
-    input  wire       rst_n     // reset_n - active low
+    input wire clk,      // clock
+    input wire rst_n,     // reset_n - active low
 
-    input  wire spi_sclk,  // Serial Clock 
-    input  wire spi_copi,  // Incoming serial data
-    input  wire spi_nCS,   // Transaction begin 
+    input wire spi_sclk,  // Serial Clock 
+    input wire spi_copi,  // Incoming serial data
+    input wire spi_nCS,   // Transaction begin 
 
-    output reg [7:0] en_reg_out_7_0     // Enable outputs on `uo_out[7:0]`
-    output reg [7:0] en_reg_out_15_8    // Enable outputs on `uio_out[7:0]`
-    output reg [7:0] en_reg_pwm_7_0     // Enable PWM for `uo_out[7:0]`
-    output reg [7:0] en_reg_pwm_15_8    // Enable PWM for `uio_out[7:0]`
+    output reg [7:0] en_reg_out_7_0,     // Enable outputs on `uo_out[7:0]`
+    output reg [7:0] en_reg_out_15_8,    // Enable outputs on `uio_out[7:0]`
+    output reg [7:0] en_reg_pwm_7_0,     // Enable PWM for `uo_out[7:0]`
+    output reg [7:0] en_reg_pwm_15_8,    // Enable PWM for `uio_out[7:0]`
     output reg [7:0] pwm_duty_cycle     // PWM Duty Cycle ( `0x00`=0%, `0xFF`=100% )
 );
 
@@ -32,17 +32,25 @@ always @(posedge clk or negedge rst_n) begin
         en_reg_pwm_15_8 <= 8'h00;
         pwm_duty_cycle <= 8'h00;
 
-        copi_sync, nCS_sync, sclk_sync <= 8'
+        copi_sync <= 2'b00;
+        sclk_sync <= 2'b00;
+        nCS_sync <= 2'b11;
 
         transaction_ready <= '0; 
         transaction_complete <= '1; 
         data_count <= 0;
     
-    end else begin                 
+    end else begin          
+
+        // en_reg_out_7_0 <= 8'hFF;
+        // en_reg_out_15_8 <= 8'hFF;
+        // en_reg_pwm_7_0 <= 8'hFF;
+        // en_reg_pwm_15_8 <= 8'hFF;       
+    
         // Stabilize signals 
-        copi_sync <= {copi_stable[0], spi_copi};
-        nCS_sync <= {nCS_stable[0], spi_nCS};
-        sclk_sync <= {sclk_stable[0], sclk_copi};
+        copi_sync <= {copi_sync[0], spi_copi};
+        nCS_sync <= {nCS_sync[0], spi_nCS};
+        sclk_sync <= {sclk_sync[0], spi_sclk};
 
         // high to low: ready for transfer
         if (nCS_sync[0] & ~nCS_sync[1] & ~transaction_complete) begin  
@@ -59,8 +67,9 @@ always @(posedge clk or negedge rst_n) begin
         // Receive data and update registers
         if (transaction_ready) begin 
             if (~sclk_sync[0] & sclk_sync[1]) begin // low to high: capture data
-                rx_payload[15 - data_count] = copi_stable;
-                data_count = data_count + 1;
+                // rx_payload[15 - data_count] <= copi_stable;
+                rx_payload <= {rx_payload[14:0], copi_stable};
+                data_count <= data_count + 1;
             end 
 
         end else if (transaction_complete & rx_payload[15]) begin  // ignore reads (rx_payload[15] = 0) 

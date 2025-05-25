@@ -36,7 +36,7 @@ module tt_um_uwasic_onboarding_peri_gandhi (
     .rst_n(rst_n),
     .spi_sclk(ui_in[0]),
     .spi_copi(ui_in[1]),
-    .spi_ncs(ui_in[2]),
+    .spi_nCS(ui_in[2])
   );
 
    // Instantiate the PWM module
