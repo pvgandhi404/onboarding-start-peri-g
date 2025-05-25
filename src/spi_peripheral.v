@@ -17,14 +17,18 @@ module spi_peripheral(
 
 reg [15:0] rx_payload; // store received payload
 reg [1:0] copi_sync, nCS_sync, sclk_sync; // registers for 2 stage FF  
-reg transaction_complete, transaction_ready; // transaction flags
 reg [3:0] data_count = 0; // index of payload
+
+// transaction flags
+reg transaction_complete = 1;
+reg transaction_ready = 0; 
 
 // Wires to stable signals
 wire copi_stable = copi_sync[1];
 
 // Sync inputs and update flags
 always @(posedge clk or negedge rst_n) begin
+
     if (!rst_n) begin               // reset --> set everything to 0
         en_reg_out_7_0 <= 8'h00;
         en_reg_out_15_8 <= 8'h00;
@@ -40,12 +44,7 @@ always @(posedge clk or negedge rst_n) begin
         transaction_complete <= '1; 
         data_count <= 0;
     
-    end else begin          
-
-        // en_reg_out_7_0 <= 8'hFF;
-        // en_reg_out_15_8 <= 8'hFF;
-        // en_reg_pwm_7_0 <= 8'hFF;
-        // en_reg_pwm_15_8 <= 8'hFF;       
+    end else begin            
     
         // Stabilize signals 
         copi_sync <= {copi_sync[0], spi_copi};
@@ -53,12 +52,12 @@ always @(posedge clk or negedge rst_n) begin
         sclk_sync <= {sclk_sync[0], spi_sclk};
 
         // high to low: ready for transfer
-        if (nCS_sync[0] & ~nCS_sync[1] & ~transaction_complete) begin  
+        if (nCS_sync[1] & ~nCS_sync[0] & transaction_complete) begin  
             transaction_ready <= 1;
             transaction_complete <= 0;
 
         // low to high: transaction complete, ensure 16 data bits received
-        end else if (~nCS_sync[0] & nCS_sync[1] & ~transaction_complete & (data_count == 15)) begin 
+        end else if (~nCS_sync[1] & nCS_sync[0] & ~transaction_complete & (data_count == 15)) begin 
             transaction_ready <= 0;
             transaction_complete <= 1;
             data_count <= 0;
@@ -67,7 +66,6 @@ always @(posedge clk or negedge rst_n) begin
         // Receive data and update registers
         if (transaction_ready) begin 
             if (~sclk_sync[0] & sclk_sync[1]) begin // low to high: capture data
-                // rx_payload[15 - data_count] <= copi_stable;
                 rx_payload <= {rx_payload[14:0], copi_stable};
                 data_count <= data_count + 1;
             end 
