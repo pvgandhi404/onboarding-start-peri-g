@@ -15,13 +15,17 @@ module spi_peripheral(
     output reg [7:0] pwm_duty_cycle     // PWM Duty Cycle ( `0x00`=0%, `0xFF`=100% )
 );
 
-reg [15:0] rx_payload; // store received payload
-reg [1:0] copi_sync, nCS_sync, sclk_sync; // registers for 2 stage FF  
+reg [15:0] rx_payload = 16'b0; // store received payload
+
+// registers for 2 stage FF  
+reg [1:0] copi_sync, sclk_sync = 2'b00; 
+reg [1:0] nCS_sync = = 2'b11;
+
 reg [3:0] data_count = 0; // index of payload
 
 // transaction flags
-reg transaction_complete = 1;
-reg transaction_ready = 0; 
+reg transaction_complete = 1'b1;
+reg transaction_ready = 1'b0; 
 
 // Wires to stable signals
 wire copi_stable = copi_sync[1];
@@ -40,9 +44,11 @@ always @(posedge clk or negedge rst_n) begin
         sclk_sync <= 2'b00;
         nCS_sync <= 2'b11;
 
-        transaction_ready <= '0; 
-        transaction_complete <= '1; 
-        data_count <= 0;
+        transaction_ready <= 1'b0; 
+        transaction_complete <= 1'b1; 
+        data_count <= 4'b0;
+
+        rx_payload <= 16'b0;
     
     end else begin            
     
@@ -82,6 +88,5 @@ always @(posedge clk or negedge rst_n) begin
         end 
     end  
 end 
-
 
 endmodule 
