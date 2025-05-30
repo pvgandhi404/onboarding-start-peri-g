@@ -3,10 +3,15 @@
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge
+from cocotb.triggers import RisingEdge, FallingEdge
 from cocotb.triggers import ClockCycles
 from cocotb.types import Logic
 from cocotb.types import LogicArray
+
+# Constants
+FREQUENCY = 3000
+RISING = 1
+FALLING = 0
 
 async def await_half_sclk(dut):
     """Wait for the SCLK signal to go high or low."""
@@ -149,8 +154,87 @@ async def test_spi(dut):
 
     dut._log.info("SPI test completed successfully")
 
+
+async def await_edge(dut, signal, num, start_sim_time, timeout, edge_type):
+    while signal.value[num] != edge_type: 
+        await(RisingEdge(dut.clk))
+        assert (cocotb.utils.get_sim_time(units="ns") - start_sim_time < timeout), "Timeout occured"
+    return
+
+async def test_frequency(dut, signal, num, timeout_ms):  
+    timeout = timeout_ms * 1000000 # convert to ns
+    start_sim_time = cocotb.utils.get_sim_time(units="ns")
+
+    # Wait for next rising edge
+    await await_edge(dut, signal, num, start_sim_time, timeout, RISING)
+    await await_edge(dut, signal, num, start_sim_time, timeout, FALLING)
+    await await_edge(dut, signal, num, start_sim_time, timeout, RISING)
+
+    # First rising edge
+    risingEdge1 = cocotb.utils.get_sim_time(units="ns")
+
+    # Wait for next rising edge
+    await await_edge(dut, signal, num, start_sim_time, timeout, FALLING)
+    await await_edge(dut, signal, num, start_sim_time, timeout, RISING)
+
+    # Second rising edge
+    risingEdge2 = cocotb.utils.get_sim_time(units="ns")
+
+    period = risingEdge2 - risingEdge1
+    period = period / (1e9) # convert to seconds
+
+    frequency = 1 / period
+
+    return frequency
+
+
 @cocotb.test()
 async def test_pwm_freq(dut):
+    dut._log.info("Starting PWM Frequency test...")
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+    
+    # Reset
+    dut._log.info("Reset")
+    dut.ena.value = 1
+    ncs = 1
+    bit = 0
+    sclk = 0
+    dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
+
+    # Write PWM 50% duty cycle to each output port
+    await send_spi_transaction(dut, 1, 0x00, 0xFF)  # Write transaction
+    await send_spi_transaction(dut, 1, 0x01, 0xFF)  # Write transaction
+    await send_spi_transaction(dut, 1, 0x02, 0xFF)  # Write transaction
+    await send_spi_transaction(dut, 1, 0x03, 0xFF)  # Write transaction
+    
+    await send_spi_transaction(dut, 1, 0x04, 0x80)  # 50% duty cycle
+
+    # Test the frequency for each output port
+    # Starting uo_out tests!
+    dut._log.info("Testing uo_out ports:")
+
+    for i in range(0, 8):
+        frequency = await test_frequency(dut, dut.uo_out, i, 1)
+        dut._log.info(f"- Frequency test: uo_out[{i}] = {frequency:.2f} Hz")
+        assert (frequency >= FREQUENCY * 0.99 and frequency <= FREQUENCY * 1.01), f"Acceptable range: [2970, 3030], got {frequency}"
+        await ClockCycles(dut.clk, 5)
+
+    # Starting uio_out tests!
+    dut._log.info("Testing uio_out ports:")
+    
+    for i in range(0, 8):
+        frequency = await test_frequency(dut, dut.uio_out, i, 1)
+        dut._log.info(f"- Frequency test: uio_out[{i}] = {frequency:.2f} Hz")
+        assert (frequency >= FREQUENCY * 0.99 and frequency <= FREQUENCY * 1.01), f"Acceptable range: [2970, 3030], got {frequency}"
+        await ClockCycles(dut.clk, 5)
+
     # Write your test here
     dut._log.info("PWM Frequency test completed successfully")
 
