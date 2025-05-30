@@ -19,7 +19,7 @@ reg [15:0] rx_payload = 16'b0; // store received payload
 
 // registers for 2 stage FF  
 reg [1:0] copi_sync, sclk_sync = 2'b00; 
-reg [1:0] nCS_sync = = 2'b11;
+reg [1:0] nCS_sync = 2'b11;
 
 reg [3:0] data_count = 0; // index of payload
 
